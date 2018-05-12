@@ -114,9 +114,7 @@ int get_file_size(int fd)
 	return (s.st_size);
 }
 
-char *path_to_pidfile(int pid) {
-	return ft_strjoin("/tmp/", ft_itoa(pid));
-}
+char *path_to_pidfile(int pid) { return ft_strjoin("/tmp/", ft_itoa(pid)); }
 char *get_ls_output(char *client_path)
 {
 	pid_t child_id;
@@ -191,7 +189,13 @@ int do_cd(char **client_path, char *cd_dir)
 	ret = mmap(0, get_file_size(fd), PROT_READ, MAP_PRIVATE, fd, 0);
 	close(fd);
 	unlink(filename);
-	return 1;
+	if (ft_strncmp(ret, "cd", 2) != 0)
+	{
+		free(*client_path);
+		*client_path = new_path;
+		return 1;
+	}
+	return 0;
 }
 
 void clear_buf(char buf[1024])
@@ -203,6 +207,26 @@ void clear_buf(char buf[1024])
 		buf[i] = '\0';
 }
 
+int get_num_of_args(char **cmd)
+{
+	int i;
+
+	i = 0;
+	while (!cmd[i])
+		i++;
+	return i;
+}
+char *get_arg(char *cmd)
+{
+	char **args;
+	char * arg_1;
+	args = ft_strsplit(cmd, " ");
+	if (get_num_of_args(args) < 2)
+		return NULL;
+	arg_1 = args[1];
+	free(args);
+	return arg_1;
+}
 int main(int argc, char **argv)
 {
 	int				   fd;
@@ -212,7 +236,7 @@ int main(int argc, char **argv)
 	int				   num;
 	int				   listen_and_accept;
 	int				   handle_client;
-	char*					client_path;
+	char *			   client_path;
 
 	listen_and_accept = 1;
 	handle_client = 1;
@@ -259,12 +283,15 @@ int main(int argc, char **argv)
 			else if (strncmp(buf, "LIST", 4) == 0)
 				send_to_ftp_client_socket(sock, "125 ", get_ls_output());
 			else if (strncmp(buf, "CD", 2) == 0)
-				send_to_ftp_client_socket(sock, "125 ", get_ls_output());
+			{
+				do_cd(client_path, get_arg(cmd));
+				//WAS WORKING HERE
+			}
+			send_to_ftp_client_socket(sock, "125 ", get_ls_output());
 			else if (strncmp(buf, "PASV", 4) == 0)
 				send_to_ftp_client_socket(sock, "227 ", "");
-			else
-				send_to_ftp_client_socket(sock, "503 Bad sequence of commands",
-										  "");
+			else send_to_ftp_client_socket(sock, "503 Bad sequence of commands",
+										   "");
 			clear_buf(buf);
 		}
 	}
