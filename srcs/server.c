@@ -117,7 +117,7 @@ int get_file_size(int fd)
 char *path_to_pidfile(int pid) {
 	return ft_strjoin("/tmp/", ft_itoa(pid));
 }
-char *get_ls_output()
+char *get_ls_output(char *client_path)
 {
 	pid_t child_id;
 	int   fd;
@@ -134,6 +134,7 @@ char *get_ls_output()
 			ft_putstr("Parent: Error opening file\n");
 		ft_putstr("Child: ");
 		ft_putendl(filename);
+		execl("/bin/cd", "/bin/cd", client_path, (char *)0);
 		close(1);
 		dup(fd);
 		execl("/bin/ls", "/bin/ls", "-l", (char *)0);
@@ -149,6 +150,50 @@ char *get_ls_output()
 	unlink(filename);
 	return ret;
 }
+char *create_new_path_from_a_cd(char *client_path, char *cd_dir)
+{
+	char *slash_dir;
+	char *new_path;
+
+	slash_dir = ft_strjoin(client_path, "/");
+	new_path = ft_strjoin(slash_dir, cd_dir);
+	free(slash_dir);
+	return new_path;
+}
+int do_cd(char **client_path, char *cd_dir)
+{
+	pid_t child_id;
+	int   fd;
+	char *new_path;
+	char *filename;
+
+	child_id = fork();
+	filename = path_to_pidfile(child_id);
+	new_path = create_new_path_from_a_cd(*client_path, cd_dir);
+	if (child_id == 0)
+	{
+		filename = path_to_pidfile(getpid());
+		fd = open(filename, O_CREAT | O_TRUNC | O_RDWR, 0777);
+		if (fd < 0)
+			ft_putstr("Parent: Error opening file\n");
+		ft_putstr("Child: ");
+		ft_putendl(filename);
+		close(1);
+		dup(fd);
+		execl("/bin/cd", "/bin/cd", new_path, (char *)0);
+		close(fd);
+		exit(0);
+	}
+	wait(NULL);
+	fd = open(filename, O_RDWR);
+	if (fd < 0)
+		ft_putstr("Parent: Error opening file\n");
+	ret = mmap(0, get_file_size(fd), PROT_READ, MAP_PRIVATE, fd, 0);
+	close(fd);
+	unlink(filename);
+	return 1;
+}
+
 void clear_buf(char buf[1024])
 {
 	int i;
@@ -167,11 +212,14 @@ int main(int argc, char **argv)
 	int				   num;
 	int				   listen_and_accept;
 	int				   handle_client;
+	char*					client_path;
 
 	listen_and_accept = 1;
 	handle_client = 1;
 	fd = 0;
 
+	client_path = ft_strnew(1024);
+	getcwd(client, 1024);
 	if (argc != 2)
 	{
 		printf("USAGE ./server [VALID PORT]\n");
@@ -210,7 +258,7 @@ int main(int argc, char **argv)
 			}
 			else if (strncmp(buf, "LIST", 4) == 0)
 				send_to_ftp_client_socket(sock, "125 ", get_ls_output());
-			else if (strncmp(buf, "CD", 4) == 0)
+			else if (strncmp(buf, "CD", 2) == 0)
 				send_to_ftp_client_socket(sock, "125 ", get_ls_output());
 			else if (strncmp(buf, "PASV", 4) == 0)
 				send_to_ftp_client_socket(sock, "227 ", "");
